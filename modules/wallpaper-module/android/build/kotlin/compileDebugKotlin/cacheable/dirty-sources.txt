@@ -1,3 +1,0 @@
-C:\Users\manav\Downloads\LiveWallpaper\modules\wallpaper-module\android\src\main\java\expo\modules\wallpapermodule\WallpaperModuleView.kt
-C:\Users\manav\Downloads\LiveWallpaper\modules\wallpaper-module\android\src\main\java\expo\modules\wallpapermodule\VideoWallpaperService.kt
-C:\Users\manav\Downloads\LiveWallpaper\modules\wallpaper-module\android\src\main\java\expo\modules\wallpapermodule\WallpaperModule.kt

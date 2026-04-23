@@ -18,17 +18,30 @@ class VideoWallpaperService : WallpaperService() {
     inner class VideoEngine : Engine() {
         private var mediaPlayer: MediaPlayer? = null
         private var keyguardManager: KeyguardManager? = null
+        private var wasVisible: Boolean = false
+        private var timeVisible: Long = 0
+        private var hasPlayedOnce: Boolean = false
 
         private val unlockReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 if (intent?.action == Intent.ACTION_USER_PRESENT) {
-                    // User just unlocked - stop animation and freeze at end
-                    val duration = mediaPlayer?.duration ?: 0
-                    if (duration > 0) {
-                        mediaPlayer?.seekTo(duration)
-                    }
-                    if (mediaPlayer?.isPlaying == true) {
-                        mediaPlayer?.pause()
+                    val timeSinceVisible = System.currentTimeMillis() - timeVisible
+                    mediaPlayer?.let { mp ->
+                        try {
+                            // If unlocked within 1.5s of screen wake, it's a direct unlock (Fingerprint/Face).
+                            if (mp.isPlaying && timeSinceVisible > 1500) {
+                                // They watched the lock screen for a while. Let it finish smoothly.
+                            } else {
+                                // Direct unlock or wasn't playing. Freeze instantly.
+                                if (mp.isPlaying) mp.pause()
+                                val duration = mp.duration
+                                if (duration > 0) {
+                                    mp.seekTo(duration)
+                                }
+                            }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
                     }
                 }
             }
@@ -41,7 +54,6 @@ class VideoWallpaperService : WallpaperService() {
             val filter = IntentFilter(Intent.ACTION_USER_PRESENT)
             this@VideoWallpaperService.registerReceiver(unlockReceiver, filter)
             
-            // Get path from SharedPreferences
             val prefs = this@VideoWallpaperService.getSharedPreferences("WallpaperPrefs", Context.MODE_PRIVATE)
             val videoPath = prefs.getString("video_path", null)
             
@@ -49,8 +61,22 @@ class VideoWallpaperService : WallpaperService() {
                 try {
                     mediaPlayer = MediaPlayer()
                     mediaPlayer?.setDataSource(this@VideoWallpaperService.applicationContext, Uri.parse(videoPath))
-                    mediaPlayer?.isLooping = false // Freeze at the end
-                    mediaPlayer?.setVolume(0f, 0f) // Mute wallpaper
+                    mediaPlayer?.isLooping = false 
+                    mediaPlayer?.setVolume(0f, 0f)
+                    
+                    // Explicitly freeze on the last frame when the video naturally finishes
+                    mediaPlayer?.setOnCompletionListener { mp ->
+                        try {
+                            mp.pause()
+                            val duration = mp.duration
+                            if (duration > 0) {
+                                mp.seekTo(duration)
+                            }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+                    
                     mediaPlayer?.prepare()
                 } catch (e: Exception) {
                     e.printStackTrace()
@@ -64,35 +90,60 @@ class VideoWallpaperService : WallpaperService() {
         }
 
         override fun onVisibilityChanged(visible: Boolean) {
-            if (visible) {
+            if (visible && !wasVisible) {
+                timeVisible = System.currentTimeMillis()
                 val isLocked = keyguardManager?.isKeyguardLocked == true
+                
                 if (isLocked) {
-                    // Lock screen: Play from beginning
-                    mediaPlayer?.seekTo(0)
-                    mediaPlayer?.start()
-                } else {
-                    // Home screen: Freeze at the end
-                    val duration = mediaPlayer?.duration ?: 0
-                    if (duration > 0) {
-                        mediaPlayer?.seekTo(duration)
+                    // Woke up to Lock Screen
+                    mediaPlayer?.let { mp ->
+                        try {
+                            if (!hasPlayedOnce) {
+                                mp.seekTo(0)
+                                mp.start()
+                                hasPlayedOnce = true
+                            }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
                     }
+                } else {
+                    // Woke up directly to Home Screen
+                    mediaPlayer?.let { mp ->
+                        try {
+                            if (mp.isPlaying) mp.pause()
+                            val duration = mp.duration
+                            if (duration > 0) mp.seekTo(duration)
+                            hasPlayedOnce = true
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+                }
+            } else if (!visible) {
+                // Screen turned off or app covered
+                try {
                     if (mediaPlayer?.isPlaying == true) {
                         mediaPlayer?.pause()
                     }
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
-            } else {
-                if (mediaPlayer?.isPlaying == true) {
-                    mediaPlayer?.pause()
-                }
+                hasPlayedOnce = false // Reset so it plays on next wake
             }
+            wasVisible = visible
         }
 
         override fun onSurfaceDestroyed(holder: SurfaceHolder) {
             super.onSurfaceDestroyed(holder)
-            if (mediaPlayer?.isPlaying == true) {
-                mediaPlayer?.pause()
+            try {
+                if (mediaPlayer?.isPlaying == true) {
+                    mediaPlayer?.pause()
+                }
+                mediaPlayer?.setSurface(null)
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
-            mediaPlayer?.setSurface(null)
         }
 
         override fun onDestroy() {
