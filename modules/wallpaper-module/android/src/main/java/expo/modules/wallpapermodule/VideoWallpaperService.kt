@@ -19,21 +19,17 @@ class VideoWallpaperService : WallpaperService() {
         private var mediaPlayer: MediaPlayer? = null
         private var keyguardManager: KeyguardManager? = null
         private var wasVisible: Boolean = false
-        private var timeVisible: Long = 0
         private var hasPlayedOnce: Boolean = false
 
         private val unlockReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 if (intent?.action == Intent.ACTION_USER_PRESENT) {
-                    val timeSinceVisible = System.currentTimeMillis() - timeVisible
                     mediaPlayer?.let { mp ->
                         try {
-                            // If unlocked within 1.5s of screen wake, it's a direct unlock (Fingerprint/Face).
-                            if (mp.isPlaying && timeSinceVisible > 1500) {
-                                // They watched the lock screen for a while. Let it finish smoothly.
+                            if (mp.isPlaying) {
+                                // If it's already playing (from lock screen), let it finish smoothly
                             } else {
-                                // Direct unlock or wasn't playing. Freeze instantly.
-                                if (mp.isPlaying) mp.pause()
+                                // If it wasn't playing, ensure it's at the end frame
                                 val duration = mp.duration
                                 if (duration > 0) {
                                     mp.seekTo(duration)
@@ -91,7 +87,6 @@ class VideoWallpaperService : WallpaperService() {
 
         override fun onVisibilityChanged(visible: Boolean) {
             if (visible && !wasVisible) {
-                timeVisible = System.currentTimeMillis()
                 val isLocked = keyguardManager?.isKeyguardLocked == true
                 
                 if (isLocked) {
