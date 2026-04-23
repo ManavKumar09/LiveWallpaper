@@ -13,21 +13,22 @@ class WallpaperModule : Module() {
     Name("WallpaperModule")
 
     Function("setVideoPath") { path: String ->
-      val context = appContext.reactContext ?: return@Function
-      val prefs = context.getSharedPreferences("WallpaperPrefs", Context.MODE_PRIVATE)
-      prefs.edit().putString("video_path", path).apply()
+      appContext.reactContext?.let { context ->
+        val prefs = context.getSharedPreferences("WallpaperPrefs", Context.MODE_PRIVATE)
+        prefs.edit().putString("video_path", path).apply()
+      }
     }
 
     Function("setAsWallpaper") {
-      val context = appContext.reactContext ?: return@Function
-      val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER)
-      intent.putExtra(
-          WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
-          ComponentName(context, VideoWallpaperService::class.java)
-      )
-      // Required because we are starting an activity from outside a standard activity context
-      intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) 
-      context.startActivity(intent)
+      appContext.reactContext?.let { context ->
+        val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER)
+        intent.putExtra(
+            WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
+            ComponentName(context, VideoWallpaperService::class.java)
+        )
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) 
+        context.startActivity(intent)
+      }
     }
   }
 }

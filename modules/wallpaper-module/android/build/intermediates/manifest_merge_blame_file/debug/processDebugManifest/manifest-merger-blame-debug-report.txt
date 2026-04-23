@@ -1,0 +1,40 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="expo.modules.wallpapermodule" >
+4
+5    <uses-sdk android:minSdkVersion="24" />
+6
+7    <uses-feature
+7-->C:\Users\manav\Downloads\LiveWallpaper\modules\wallpaper-module\android\src\main\AndroidManifest.xml:2:5-92
+8        android:name="android.software.live_wallpaper"
+8-->C:\Users\manav\Downloads\LiveWallpaper\modules\wallpaper-module\android\src\main\AndroidManifest.xml:2:19-65
+9        android:required="true" />
+9-->C:\Users\manav\Downloads\LiveWallpaper\modules\wallpaper-module\android\src\main\AndroidManifest.xml:2:66-89
+10
+11    <application>
+11-->C:\Users\manav\Downloads\LiveWallpaper\modules\wallpaper-module\android\src\main\AndroidManifest.xml:3:5-15:19
+12        <service
+12-->C:\Users\manav\Downloads\LiveWallpaper\modules\wallpaper-module\android\src\main\AndroidManifest.xml:4:9-14:19
+13            android:name="expo.modules.wallpapermodule.VideoWallpaperService"
+13-->C:\Users\manav\Downloads\LiveWallpaper\modules\wallpaper-module\android\src\main\AndroidManifest.xml:5:13-50
+14            android:exported="true"
+14-->C:\Users\manav\Downloads\LiveWallpaper\modules\wallpaper-module\android\src\main\AndroidManifest.xml:7:13-36
+15            android:permission="android.permission.BIND_WALLPAPER" >
+15-->C:\Users\manav\Downloads\LiveWallpaper\modules\wallpaper-module\android\src\main\AndroidManifest.xml:6:13-67
+16            <intent-filter>
+16-->C:\Users\manav\Downloads\LiveWallpaper\modules\wallpaper-module\android\src\main\AndroidManifest.xml:8:13-10:29
+17                <action android:name="android.service.wallpaper.WallpaperService" />
+17-->C:\Users\manav\Downloads\LiveWallpaper\modules\wallpaper-module\android\src\main\AndroidManifest.xml:9:17-85
+17-->C:\Users\manav\Downloads\LiveWallpaper\modules\wallpaper-module\android\src\main\AndroidManifest.xml:9:25-82
+18            </intent-filter>
+19
+20            <meta-data
+20-->C:\Users\manav\Downloads\LiveWallpaper\modules\wallpaper-module\android\src\main\AndroidManifest.xml:11:13-13:53
+21                android:name="android.service.wallpaper"
+21-->C:\Users\manav\Downloads\LiveWallpaper\modules\wallpaper-module\android\src\main\AndroidManifest.xml:12:17-57
+22                android:resource="@xml/wallpaper" />
+22-->C:\Users\manav\Downloads\LiveWallpaper\modules\wallpaper-module\android\src\main\AndroidManifest.xml:13:17-50
+23        </service>
+24    </application>
+25
+26</manifest>
