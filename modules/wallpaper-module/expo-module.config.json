@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android", "web"],
+  "apple": {
+    "modules": ["WallpaperModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.wallpapermodule.WallpaperModule"]
+  }
+}

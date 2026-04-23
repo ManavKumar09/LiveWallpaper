@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "LiveWallpaper",
+    "slug": "LiveWallpaper",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/logo.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.manav.livewallpaper",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/logo.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to let you set them as wallpaper.",
+          "videosPermission": "The app accesses your videos to let you set them as wallpaper."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "e6b000e4-8acf-4024-a85c-8f6b69365625"
+      }
+    }
+  }
+}
