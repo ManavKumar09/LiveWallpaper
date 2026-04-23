@@ -37,18 +37,18 @@ class VideoWallpaperService : WallpaperService() {
         override fun onCreate(surfaceHolder: SurfaceHolder?) {
             super.onCreate(surfaceHolder)
             
-            keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+            keyguardManager = this@VideoWallpaperService.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
             val filter = IntentFilter(Intent.ACTION_USER_PRESENT)
-            registerReceiver(unlockReceiver, filter)
+            this@VideoWallpaperService.registerReceiver(unlockReceiver, filter)
             
             // Get path from SharedPreferences
-            val prefs = getSharedPreferences("WallpaperPrefs", Context.MODE_PRIVATE)
+            val prefs = this@VideoWallpaperService.getSharedPreferences("WallpaperPrefs", Context.MODE_PRIVATE)
             val videoPath = prefs.getString("video_path", null)
             
             if (videoPath != null) {
                 try {
                     mediaPlayer = MediaPlayer()
-                    mediaPlayer?.setDataSource(applicationContext, Uri.parse(videoPath))
+                    mediaPlayer?.setDataSource(this@VideoWallpaperService.applicationContext, Uri.parse(videoPath))
                     mediaPlayer?.isLooping = false // Freeze at the end
                     mediaPlayer?.setVolume(0f, 0f) // Mute wallpaper
                     mediaPlayer?.prepare()
@@ -98,7 +98,7 @@ class VideoWallpaperService : WallpaperService() {
         override fun onDestroy() {
             super.onDestroy()
             try {
-                unregisterReceiver(unlockReceiver)
+                this@VideoWallpaperService.unregisterReceiver(unlockReceiver)
             } catch (e: Exception) {
                 e.printStackTrace()
             }

@@ -1,4 +1,4 @@
-<manifest package="expo.modules.wallpapermodule">
+<manifest package="expo.modules.wallpapermodule" xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-feature android:name="android.software.live_wallpaper" android:required="true" />
     <application>
         <service
