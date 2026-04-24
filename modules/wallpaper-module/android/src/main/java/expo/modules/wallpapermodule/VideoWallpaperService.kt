@@ -5,12 +5,16 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.media.MediaPlayer
-import android.net.Uri
 import android.content.SharedPreferences
-import android.util.Log
+import android.net.Uri
+import android.os.Build
 import android.service.wallpaper.WallpaperService
+import android.util.Log
 import android.view.SurfaceHolder
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
+import java.io.File
 
 class VideoWallpaperService : WallpaperService() {
     override fun onCreateEngine(): Engine {
@@ -18,9 +22,8 @@ class VideoWallpaperService : WallpaperService() {
     }
 
     inner class VideoEngine : Engine() {
-        private var mediaPlayer: MediaPlayer? = null
+        private var exoPlayer: ExoPlayer? = null
         private var keyguardManager: KeyguardManager? = null
-        private var wasVisible: Boolean = false
         private var hasPlayedOnce: Boolean = false
         private var isPrepared: Boolean = false
 
@@ -36,30 +39,29 @@ class VideoWallpaperService : WallpaperService() {
                 when (intent?.action) {
                     Intent.ACTION_USER_PRESENT -> {
                         // System unlocked
-                        mediaPlayer?.let { mp ->
+                        exoPlayer?.let { player ->
                             try {
-                                if (mp.isPlaying) {
+                                if (player.isPlaying) {
                                     // Let it finish naturally
                                 } else if (hasPlayedOnce) {
                                     // Already finished, stay at end
-                                    val duration = mp.duration
-                                    if (duration > 0) mp.seekTo(duration)
+                                    val duration = player.duration
+                                    if (duration > 0) player.seekTo(duration)
                                 }
                             } catch (e: Exception) {
-                                e.printStackTrace()
+                                Log.e("WallpaperService", "Error in USER_PRESENT", e)
                             }
                         }
                     }
                     Intent.ACTION_SCREEN_OFF -> {
-                        // Reset state only when screen actually turns off
-                        Log.d("WallpaperService", "Screen turned off: Resetting hasPlayedOnce")
+                        Log.d("WallpaperService", "Screen turned off: Resetting state")
                         hasPlayedOnce = false
                         try {
-                            if (mediaPlayer?.isPlaying == true) {
-                                mediaPlayer?.pause()
+                            if (exoPlayer?.isPlaying == true) {
+                                exoPlayer?.pause()
                             }
                         } catch (e: Exception) {
-                            e.printStackTrace()
+                            Log.e("WallpaperService", "Error in SCREEN_OFF", e)
                         }
                     }
                 }
@@ -70,11 +72,17 @@ class VideoWallpaperService : WallpaperService() {
             super.onCreate(surfaceHolder)
             
             keyguardManager = this@VideoWallpaperService.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+            
             val filter = IntentFilter().apply {
                 addAction(Intent.ACTION_USER_PRESENT)
                 addAction(Intent.ACTION_SCREEN_OFF)
             }
-            this@VideoWallpaperService.registerReceiver(wallpaperReceiver, filter)
+            
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                this@VideoWallpaperService.registerReceiver(wallpaperReceiver, filter, Context.RECEIVER_EXPORTED)
+            } else {
+                this@VideoWallpaperService.registerReceiver(wallpaperReceiver, filter)
+            }
             
             val prefs = this@VideoWallpaperService.getSharedPreferences("WallpaperPrefs", Context.MODE_PRIVATE)
             prefs.registerOnSharedPreferenceChangeListener(prefsListener)
@@ -89,46 +97,50 @@ class VideoWallpaperService : WallpaperService() {
             if (videoPath != null) {
                 try {
                     isPrepared = false
-                    mediaPlayer?.release()
-                    mediaPlayer = MediaPlayer()
-                    mediaPlayer?.setDataSource(this@VideoWallpaperService.applicationContext, Uri.parse(videoPath))
-                    mediaPlayer?.isLooping = false 
-                    mediaPlayer?.setVolume(0f, 0f)
+                    exoPlayer?.release()
                     
-                    mediaPlayer?.setOnCompletionListener { mp ->
-                        try {
-                            mp.pause()
-                            val duration = mp.duration
-                            if (duration > 0) mp.seekTo(duration)
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
-                    }
+                    exoPlayer = ExoPlayer.Builder(this@VideoWallpaperService).build().apply {
+                        val mediaItem = MediaItem.fromUri(Uri.fromFile(File(videoPath)))
+                        setMediaItem(mediaItem)
+                        repeatMode = Player.REPEAT_MODE_OFF
+                        volume = 0f
+                        
+                        addListener(object : Player.Listener {
+                            override fun onPlaybackStateChanged(playbackState: Int) {
+                                if (playbackState == Player.STATE_READY) {
+                                    isPrepared = true
+                                    Log.d("WallpaperService", "ExoPlayer ready")
+                                    if (isVisible) {
+                                        handleVisibilityChange(true)
+                                    }
+                                } else if (playbackState == Player.STATE_ENDED) {
+                                    pause()
+                                    val duration = duration
+                                    if (duration > 0) seekTo(duration)
+                                }
+                            }
 
-                    mediaPlayer?.setOnPreparedListener {
-                        isPrepared = true
-                        Log.d("WallpaperService", "MediaPlayer prepared and ready")
-                        // If it became visible while preparing, trigger it now
-                        if (isVisible) {
-                            handleVisibilityChange(true)
-                        }
+                            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                                Log.e("WallpaperService", "ExoPlayer Error: ${error.message}", error)
+                            }
+                        })
+                        
+                        prepare()
                     }
-                    
-                    mediaPlayer?.prepareAsync()
                     
                     // Re-link surface if already created
                     if (surfaceHolder?.surface != null) {
-                        mediaPlayer?.setSurface(surfaceHolder.surface)
+                        exoPlayer?.setVideoSurface(surfaceHolder.surface)
                     }
                 } catch (e: Exception) {
-                    Log.e("WallpaperService", "Error loading video", e)
+                    Log.e("WallpaperService", "Error loading video with ExoPlayer", e)
                 }
             }
         }
 
         override fun onSurfaceCreated(holder: SurfaceHolder) {
             super.onSurfaceCreated(holder)
-            mediaPlayer?.setSurface(holder.surface)
+            exoPlayer?.setVideoSurface(holder.surface)
         }
 
         override fun onVisibilityChanged(visible: Boolean) {
@@ -146,12 +158,12 @@ class VideoWallpaperService : WallpaperService() {
                 
                 if (isLocked) {
                     // Woke up to Lock Screen
-                    mediaPlayer?.let { mp ->
+                    exoPlayer?.let { player ->
                         try {
                             if (!hasPlayedOnce) {
                                 Log.d("WallpaperService", "Starting playback on Lock Screen")
-                                mp.seekTo(0)
-                                mp.start()
+                                player.seekTo(0)
+                                player.play()
                                 hasPlayedOnce = true
                             } else {
                                 Log.d("WallpaperService", "Already played once, skipping start")
@@ -162,14 +174,14 @@ class VideoWallpaperService : WallpaperService() {
                     }
                 } else {
                     // Home Screen visible
-                    mediaPlayer?.let { mp ->
+                    exoPlayer?.let { player ->
                         try {
-                            if (mp.isPlaying) {
+                            if (player.isPlaying) {
                                 Log.d("WallpaperService", "Home screen visible: Animation continuing smoothly")
                             } else if (!hasPlayedOnce) {
                                 Log.d("WallpaperService", "Direct Home Wake: Seeking to end")
-                                val duration = mp.duration
-                                if (duration > 0) mp.seekTo(duration)
+                                val duration = player.duration
+                                if (duration > 0) player.seekTo(duration)
                                 hasPlayedOnce = true
                             }
                         } catch (e: Exception) {
@@ -178,18 +190,14 @@ class VideoWallpaperService : WallpaperService() {
                     }
                 }
             }
-            wasVisible = visible
         }
 
         override fun onSurfaceDestroyed(holder: SurfaceHolder) {
             super.onSurfaceDestroyed(holder)
             try {
-                if (mediaPlayer?.isPlaying == true) {
-                    mediaPlayer?.pause()
-                }
-                mediaPlayer?.setSurface(null)
+                exoPlayer?.clearVideoSurface()
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.e("WallpaperService", "Error in onSurfaceDestroyed", e)
             }
         }
 
@@ -200,10 +208,10 @@ class VideoWallpaperService : WallpaperService() {
                 val prefs = this@VideoWallpaperService.getSharedPreferences("WallpaperPrefs", Context.MODE_PRIVATE)
                 prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.e("WallpaperService", "Error in onDestroy", e)
             }
-            mediaPlayer?.release()
-            mediaPlayer = null
+            exoPlayer?.release()
+            exoPlayer = null
         }
     }
 }

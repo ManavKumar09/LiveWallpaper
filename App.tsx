@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { 
-  StyleSheet, 
-  View, 
-  AppState, 
-  AppStateStatus, 
-  Dimensions, 
-  TouchableOpacity, 
+import {
+  StyleSheet,
+  View,
+  AppState,
+  AppStateStatus,
+  Dimensions,
+  TouchableOpacity,
   Text,
   Image,
   Animated
@@ -24,7 +24,7 @@ const VIDEO_KEY = '@user_video_uri';
 export default function App() {
   const [videoUri, setVideoUri] = useState<string | null>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  
+
   const videoRef = useRef<Video>(null);
   const appState = useRef(AppState.currentState);
 
@@ -78,7 +78,7 @@ export default function App() {
       const uri = result.assets[0].uri;
       setVideoUri(uri);
       await AsyncStorage.setItem(VIDEO_KEY, uri);
-      
+
       // Update Native Module
       WallpaperModule.setVideoPath(uri);
     }
@@ -107,9 +107,9 @@ export default function App() {
       ) : (
         <View style={styles.emptyContainer}>
           <View style={styles.glowCircle} />
-          <Image 
-            source={require('./assets/logo.png')} 
-            style={styles.logo} 
+          <Image
+            source={require('./assets/logo.png')}
+            style={styles.logo}
           />
           <Text style={styles.title}>Live Wallpaper Maker</Text>
           <Text style={styles.subtitle}>Bring your lock screen to life with seamless animations.</Text>
@@ -119,23 +119,23 @@ export default function App() {
       {/* Controls Panel */}
       <Animated.View style={[styles.controlsPanel, { opacity: fadeAnim }]}>
         {!videoUri ? (
-           <TouchableOpacity style={[styles.primaryButton, styles.shadow]} onPress={pickVideo}>
-             <Text style={styles.primaryButtonText}>Select Video from Gallery</Text>
-           </TouchableOpacity>
+          <TouchableOpacity style={[styles.primaryButton, styles.shadow]} onPress={pickVideo}>
+            <Text style={styles.primaryButtonText}>Select Video from Gallery</Text>
+          </TouchableOpacity>
         ) : (
           <>
             <View style={styles.actionRow}>
               <TouchableOpacity style={styles.secondaryButton} onPress={pickVideo}>
                 <Text style={styles.secondaryButtonText}>Change Video</Text>
               </TouchableOpacity>
-              
+
               <TouchableOpacity style={styles.secondaryButton} onPress={() => videoRef.current?.replayAsync()}>
                 <Text style={styles.secondaryButtonText}>Replay Animation</Text>
               </TouchableOpacity>
             </View>
-            
-            <TouchableOpacity 
-              style={[styles.primaryButton, styles.shadow, { marginTop: 15 }]} 
+
+            <TouchableOpacity
+              style={[styles.primaryButton, styles.shadow, { marginTop: 15 }]}
               onPress={setAsSystemWallpaper}
             >
               <Text style={styles.primaryButtonText}>✨ Set as Live Wallpaper</Text>
