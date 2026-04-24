@@ -7,6 +7,8 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.media.MediaPlayer
 import android.net.Uri
+import android.content.SharedPreferences
+import android.util.Log
 import android.service.wallpaper.WallpaperService
 import android.view.SurfaceHolder
 
@@ -20,20 +22,41 @@ class VideoWallpaperService : WallpaperService() {
         private var keyguardManager: KeyguardManager? = null
         private var wasVisible: Boolean = false
         private var hasPlayedOnce: Boolean = false
+        private var isPrepared: Boolean = false
 
-        private val unlockReceiver = object : BroadcastReceiver() {
+        private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
+            if (key == "video_path") {
+                Log.d("WallpaperService", "Video path changed, reloading...")
+                loadVideo()
+            }
+        }
+
+        private val wallpaperReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
-                if (intent?.action == Intent.ACTION_USER_PRESENT) {
-                    mediaPlayer?.let { mp ->
-                        try {
-                            if (mp.isPlaying) {
-                                // If it's already playing (from lock screen), let it finish smoothly
-                            } else {
-                                // If it wasn't playing, ensure it's at the end frame
-                                val duration = mp.duration
-                                if (duration > 0) {
-                                    mp.seekTo(duration)
+                when (intent?.action) {
+                    Intent.ACTION_USER_PRESENT -> {
+                        // System unlocked
+                        mediaPlayer?.let { mp ->
+                            try {
+                                if (mp.isPlaying) {
+                                    // Let it finish naturally
+                                } else if (hasPlayedOnce) {
+                                    // Already finished, stay at end
+                                    val duration = mp.duration
+                                    if (duration > 0) mp.seekTo(duration)
                                 }
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
+                    }
+                    Intent.ACTION_SCREEN_OFF -> {
+                        // Reset state only when screen actually turns off
+                        Log.d("WallpaperService", "Screen turned off: Resetting hasPlayedOnce")
+                        hasPlayedOnce = false
+                        try {
+                            if (mediaPlayer?.isPlaying == true) {
+                                mediaPlayer?.pause()
                             }
                         } catch (e: Exception) {
                             e.printStackTrace()
@@ -47,35 +70,58 @@ class VideoWallpaperService : WallpaperService() {
             super.onCreate(surfaceHolder)
             
             keyguardManager = this@VideoWallpaperService.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
-            val filter = IntentFilter(Intent.ACTION_USER_PRESENT)
-            this@VideoWallpaperService.registerReceiver(unlockReceiver, filter)
+            val filter = IntentFilter().apply {
+                addAction(Intent.ACTION_USER_PRESENT)
+                addAction(Intent.ACTION_SCREEN_OFF)
+            }
+            this@VideoWallpaperService.registerReceiver(wallpaperReceiver, filter)
             
+            val prefs = this@VideoWallpaperService.getSharedPreferences("WallpaperPrefs", Context.MODE_PRIVATE)
+            prefs.registerOnSharedPreferenceChangeListener(prefsListener)
+            
+            loadVideo()
+        }
+
+        private fun loadVideo() {
             val prefs = this@VideoWallpaperService.getSharedPreferences("WallpaperPrefs", Context.MODE_PRIVATE)
             val videoPath = prefs.getString("video_path", null)
             
             if (videoPath != null) {
                 try {
+                    isPrepared = false
+                    mediaPlayer?.release()
                     mediaPlayer = MediaPlayer()
                     mediaPlayer?.setDataSource(this@VideoWallpaperService.applicationContext, Uri.parse(videoPath))
                     mediaPlayer?.isLooping = false 
                     mediaPlayer?.setVolume(0f, 0f)
                     
-                    // Explicitly freeze on the last frame when the video naturally finishes
                     mediaPlayer?.setOnCompletionListener { mp ->
                         try {
                             mp.pause()
                             val duration = mp.duration
-                            if (duration > 0) {
-                                mp.seekTo(duration)
-                            }
+                            if (duration > 0) mp.seekTo(duration)
                         } catch (e: Exception) {
                             e.printStackTrace()
                         }
                     }
+
+                    mediaPlayer?.setOnPreparedListener {
+                        isPrepared = true
+                        Log.d("WallpaperService", "MediaPlayer prepared and ready")
+                        // If it became visible while preparing, trigger it now
+                        if (isVisible) {
+                            handleVisibilityChange(true)
+                        }
+                    }
                     
-                    mediaPlayer?.prepare()
+                    mediaPlayer?.prepareAsync()
+                    
+                    // Re-link surface if already created
+                    if (surfaceHolder?.surface != null) {
+                        mediaPlayer?.setSurface(surfaceHolder.surface)
+                    }
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    Log.e("WallpaperService", "Error loading video", e)
                 }
             }
         }
@@ -86,7 +132,16 @@ class VideoWallpaperService : WallpaperService() {
         }
 
         override fun onVisibilityChanged(visible: Boolean) {
-            if (visible && !wasVisible) {
+            handleVisibilityChange(visible)
+        }
+
+        private fun handleVisibilityChange(visible: Boolean) {
+            if (visible) {
+                if (!isPrepared) {
+                    Log.d("WallpaperService", "Visible but not prepared yet, waiting...")
+                    return
+                }
+
                 val isLocked = keyguardManager?.isKeyguardLocked == true
                 
                 if (isLocked) {
@@ -94,37 +149,34 @@ class VideoWallpaperService : WallpaperService() {
                     mediaPlayer?.let { mp ->
                         try {
                             if (!hasPlayedOnce) {
+                                Log.d("WallpaperService", "Starting playback on Lock Screen")
                                 mp.seekTo(0)
                                 mp.start()
                                 hasPlayedOnce = true
+                            } else {
+                                Log.d("WallpaperService", "Already played once, skipping start")
                             }
                         } catch (e: Exception) {
-                            e.printStackTrace()
+                            Log.e("WallpaperService", "Error in Lock Screen visibility", e)
                         }
                     }
                 } else {
-                    // Woke up directly to Home Screen
+                    // Home Screen visible
                     mediaPlayer?.let { mp ->
                         try {
-                            if (mp.isPlaying) mp.pause()
-                            val duration = mp.duration
-                            if (duration > 0) mp.seekTo(duration)
-                            hasPlayedOnce = true
+                            if (mp.isPlaying) {
+                                Log.d("WallpaperService", "Home screen visible: Animation continuing smoothly")
+                            } else if (!hasPlayedOnce) {
+                                Log.d("WallpaperService", "Direct Home Wake: Seeking to end")
+                                val duration = mp.duration
+                                if (duration > 0) mp.seekTo(duration)
+                                hasPlayedOnce = true
+                            }
                         } catch (e: Exception) {
-                            e.printStackTrace()
+                            Log.e("WallpaperService", "Error in Home Screen visibility", e)
                         }
                     }
                 }
-            } else if (!visible) {
-                // Screen turned off or app covered
-                try {
-                    if (mediaPlayer?.isPlaying == true) {
-                        mediaPlayer?.pause()
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-                hasPlayedOnce = false // Reset so it plays on next wake
             }
             wasVisible = visible
         }
@@ -144,7 +196,9 @@ class VideoWallpaperService : WallpaperService() {
         override fun onDestroy() {
             super.onDestroy()
             try {
-                this@VideoWallpaperService.unregisterReceiver(unlockReceiver)
+                this@VideoWallpaperService.unregisterReceiver(wallpaperReceiver)
+                val prefs = this@VideoWallpaperService.getSharedPreferences("WallpaperPrefs", Context.MODE_PRIVATE)
+                prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
             } catch (e: Exception) {
                 e.printStackTrace()
             }
